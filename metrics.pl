@@ -16,11 +16,11 @@ my $browser = WWW::Mechanize->new();
 print "Getting Job Tracker metrics json $json_url \n or reading $metrics_file...\n";
 $browser->get( $json_url );
 my $content = $browser->content();
-#my $json = $content; # from URL
+my $json = $content; # from URL
 
 my $metrics_fn = $metrics_file;
-open(my $fh, "<", $metrics_fn) or die "cannot open < $metrics_fn: $!";
-my $json = <$fh>; # from file
+#open(my $fh, "<", $metrics_fn) or die "cannot open < $metrics_fn: $!";
+#my $json = <$fh>; # from file
 
 #print "json object: " . $json . "\n";
 
@@ -28,7 +28,7 @@ my $json = <$fh>; # from file
 # http://www.tutorialspoint.com/json/json_perl_example.htm
 # method 1  most readable
 my $metrics = decode_json($json);
-#print  Dumper($metrics);
+print Dumper($metrics);
 
 #job tracker level metrics -- global
 my $jobtracker = $metrics -> { 'mapred' } -> { 'jobtracker' }[0][1];
@@ -54,7 +54,7 @@ if ((@jobs)) {
 
 my %current_job = ();
 
-my $i=0, my $j=0, my $k=0;
+my $i=0, my $j=0, my $k=0, my $l=0;
 # following loop iterates and extracts from #jobs - array of array of hashes
 foreach my $tasks(@jobs){
 	$i++;
@@ -73,8 +73,15 @@ foreach my $tasks(@jobs){
 	  foreach my $unit (@{$task}) {  # unit is the atomic level hash or leaf node
     	$k++;
 			#print "unit = $unit\n";
+
+
 			my $count = keys %$unit;
+      if($count == 3) {
+	      $current_job{'name'} = $unit->{'name'};
+      }
+
       if($count == 5) {
+      	$l++;
       	$current_job{'runningTasks'} = $unit->{'runningTasks'};
         $current_job{'demand'} = $unit->{'demand'};
 
@@ -86,8 +93,22 @@ foreach my $tasks(@jobs){
 	  }
 	}
 }
-print "i=$i, j=$j, k=$k\n";
+
+
+#hadoop job -counter job_201405141544_0017 org.apache.hadoop.mapreduce.JobCounter TOTAL_LAUNCHED_MAPS
+my $cmd = "hadoop job -counter " . $current_job{'name'} . " org.apache.hadoop.mapreduce.JobCounter TOTAL_LAUNCHED_MAPS";
+print "executing command: $cmd\n";
+my $output = `$cmd`;
+print "output: $output\n";
+
+my $maps_completed = 0; # default of zero
+if ($output =~ /([0-9]+)/) {
+   $maps_completed = $1;
+}
+
+print "maps_completed =" . ($maps_completed -  $current_job{'runningTasks'}) . "\n";
+print "i=$i, j=$j, k=$k, l=$l\n";
 print "map profile for a job...\n";
+print "name=" . $current_job{'name'} . "\n";
 print "runningTasks=" . $current_job{'runningTasks'} . "\n";
 print "demand=" . $current_job{'demand'} . "\n";
-

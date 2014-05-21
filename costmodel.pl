@@ -13,19 +13,24 @@ my $json_url = "http://$edge_master:50030/metrics?format=json";
 my $metrics_file = "C:/Users/mian/Documents/research/academic-profile/academic job/pdf/york/MRBurst/MRBurst/metrics_existing_job";
 my $browser = WWW::Mechanize->new();
 
+my $bw = 245; #285 Mbps
+
+my %job_profile = ();
+$job_profile{'ii'}{'mc'} =  0.122222222; #inverted index
+$job_profile{'ii'}{'mt'} =  52.13122222;
+$job_profile{'ii'}{'t'} =  7.10880303;
+
+$job_profile{'wc'}{'mc'} =  0.122222222; #word count
+$job_profile{'wc'}{'mt'} =  50.519;
+$job_profile{'wc'}{'t'} =  6.888954545;
+
+$job_profile{'grep'}{'mc'} =  0.122222222; #grep
+$job_profile{'grep'}{'mt'} =  8.960333333;
+$job_profile{'grep'}{'t'} =  1.221863636;
+
 my $mc = 0.122222222;
 my $mt = 52.13122222;
 my $t = 7.10880303;
-my $bw = 245; #285 Mbps
-
-
-# input: <binary.jar>, <class>, <local data dir>, <results data dir>
-my $numArgs = $#ARGV + 1;
-my $binary_jar = ();
-my $class = ();
-my $data_dir = ();
-my $output_dir = ();
-my $output_to_edge = 0;
 
 if (edgeBusy()) {
 	print "burst out to core\n";
@@ -146,12 +151,12 @@ sub edgeBusy {
   my $slots = $map_slots;
   my $data = 50;
 
-  my $cost_e = ($data - ($maps_completed * $mc))/$slots * $t;
-  my $cost_i = ($data * $t)/$slots;
+  my $cost_e = ($data - ($maps_completed * $job_profile{'ii'}{'mc'}))/$slots * $job_profile{'ii'}{'t'};
+  my $cost_i = ($data * $job_profile{'grep'}{'t'})/$slots;
   my $cost_l = $cost_e + $cost_i;
 
   # We begin by assuming the core is idle.
-  my $cost_ri = ($data * $t) / $slots + ($data * 1024) / ($bw * 60/8);
+  my $cost_ri = ($data * $job_profile{'grep'}{'t'}) / $slots + ($data * 1024) / ($bw * 60/8);
 
   print "execution cost of existing job = $cost_e\n";
   print "execution cost new job = $cost_i\n";

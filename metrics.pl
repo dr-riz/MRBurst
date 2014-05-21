@@ -52,25 +52,6 @@ if ((@jobs)) {
   #print Dumper(@jobs);
 }
 
-if ($num_of_jobs > 0 ){
-	my $job = $metrics -> { 'fairscheduler' } -> { 'jobs' }[1][0];
-
-  my $taskType = $job -> {'taskType'};
-  my $hostName = $job -> {'hostName'};
-  my $name = $job -> {'name'};
-
-	print "taskType = $taskType\n";
-	print "hostName = $hostName\n";
- 	print "name = $name\n";
-
- 	$job = $metrics -> { 'fairscheduler' } -> { 'jobs' }[1][1];
-  my $runningTasks = $job -> {'runningTasks'};
-	print "runningTasks = $runningTasks\n";
-
-  my $demand = $job -> {'demand'};
-	print "demand = $demand\n";
-}
-
 my %current_job = ();
 
 my $i=0, my $j=0, my $k=0;
@@ -109,44 +90,4 @@ print "i=$i, j=$j, k=$k\n";
 print "map profile for a job...\n";
 print "runningTasks=" . $current_job{'runningTasks'} . "\n";
 print "demand=" . $current_job{'demand'} . "\n";
-
-#print "trying to extract task out...\n";
-#my @tasks = $metrics -> { 'fairscheduler' } -> { 'jobs' }[2]; #array of hashes
-#print "number of elements in task = " . @tasks;
-#print Dumper(@tasks);
-#foreach my $task (@tasks) {
-#	print "task = $task\n";
-#	foreach my $unit (@{$task}) {  # unit is the atomic level hash or leaf node
-#		print "unit = $unit\n";
-#		my $count = keys %$unit;
-#		print "number of elements in hash = " . $count . "\n";
-#    while( my ($k, $v) = each %$unit ) {
-#        print "key: $k, value: $v.\n";
-#    }
-#  }
-#}
-
-#my @tasks = $metrics -> { 'fairscheduler' } -> { 'jobs' }[0]; #array of hashes
-#foreach my $task (@tasks) {
-#	print "task = $task\n";
-#  foreach my $unit (@{$task}) {  # unit is the atomic level hash or leaf node
-#		print "unit = $unit\n";
-#		my $count = keys %$unit;
-#		print "number of elements in hash = " . $count . "\n";
-#    while( my ($k, $v) = each %$unit ) {
-#        print "key: $k, value: $v.\n";
-#    }
-#  }
-#}
-
-#   my $count = @unit;
-#   print "number of elements in hash = " . $count . "\n";
-
-# my @task = $metrics -> { 'fairscheduler' } -> { 'jobs' }[0][0]; # hash-level
-#foreach my $unit (@task) {
-#	print "unit = $unit\n";
-#  my $count = keys %$unit;
-#  print "number of elements in hash = " . $count . "\n";
-#}
-
 

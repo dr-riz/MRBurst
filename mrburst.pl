@@ -15,6 +15,7 @@ my $browser = WWW::Mechanize->new();
 my $bw = 245; #285 Mbps
 my %job_profile = ();
 
+# profile data of different benchmarks
 # Mc = data consumed by each map task
 # Mt = average time spent by each map in the occupied slots
 # t = execution time of 1 slot with 1 GB of job data
@@ -35,21 +36,24 @@ $job_profile{'classification'}{'mc'} =  0.125; #classification
 $job_profile{'classification'}{'mt'} =  40.9185;
 $job_profile{'classification'}{'t'} =  5.4558;
 
-# input: <binary.jar>, <class>, <local data dir>, <results data dir>
-my $numArgs = $#ARGV + 1;
+# input: <binary.jar>, <class>, <local data dir>, <results data dir>, <output to edge 0|1>
+my $numArgs = 0;
 my $binary_jar = ();
 my $class = ();
 my $data_dir = ();
 my $output_dir = ();
+my $job_params = ();
 my $output_to_edge = 0;
+
 my $new_job_name = ();
 my $input_data_size = 0;
 my $existing_job_name = ();
 my $existing_job = 0; # by default, there is no existing job
 my $existing_job_data_size = 0;
 
-if ($numArgs != 5) {
-	print "please, provide <binary_jar>, <class_name>, <data_dir>, <output_dir>, <output to edge 0|1>  as parameters\n";
+my $numArgs = $#ARGV + 1;
+if ($numArgs != 6) {
+	print "please, provide <binary_jar>, <class_name>, <data_dir>, <output_dir>, <job-input-params>, <output to edge 0|1>  as parameters\n";
 	exit(1);
 } else {
   $binary_jar = $ARGV[0]; print "binary_jar: $binary_jar\n";
@@ -91,9 +95,7 @@ if ($numArgs != 5) {
   	print "existing_job_input_folder:$existing_job_input_folder\n";
 
 	  $cmd = "hadoop fs -du -s $existing_job_input_folder";
-  	#print "cmd=$cmd\n";
 	  $output = `$cmd`;
-  	#print "output=$output\n";
 
 		if ($output =~ /^([0-9]+)/) {
   		$existing_job_data_size = $1;
@@ -114,20 +116,20 @@ if ($numArgs != 5) {
   print "input_data_size = $input_data_size GB\n";
 
   $output_dir = $ARGV[3]; print "output data dir: $output_dir\n";
-  $output_to_edge = $ARGV[4]; print "write results on edge?: $output_to_edge\n";
+  $job_params = $ARGV [4]; print "parameters for job: $job_params\n";
+  $output_to_edge = $ARGV[5]; print "write results on edge?: $output_to_edge\n";
 }
 
 if (edgeBusy()) {
-#if (1) {
 	print "cheaper to execute in core, burst out to core\n";
-  #remoteAccess();
+  remoteAccess();
 	#distcp();
 } else {
 	print "cheaper to execute in edge, submit in edge\n";
-  #my $cmd = "hadoop jar $binary_jar $class $data_dir $output_dir";
-#	print "executing command: $cmd\n";
-#	my $retcode = system($cmd) == 0 or die "system failed with ret code?: $?";
-#	print "retcode = $retcode\n";
+  my $cmd = "hadoop jar $binary_jar $class $data_dir $output_dir";
+	print "executing command: $cmd\n";
+	my $retcode = system($cmd) == 0 or die "system failed with ret code?: $?";
+	print "retcode = $retcode\n";
 }
 
 sub edgeBusy {
@@ -138,23 +140,19 @@ sub edgeBusy {
 	my $content = $browser->content();
 	my $json = $content; # from URL
 
-#	my $metrics_fn = "C:/Users/mian/Documents/tmp/metrics_kmeans";
-#	open(my $fh, "<", $metrics_fn) or die "cannot open < $metrics_fn: $!";
-	#my $json = <$fh>; # from file
-
 	#print "json object: " . $json . "\n";
 
 # parsing json: http://search.cpan.org/~bkb/JSON-Parse-0.30/lib/JSON/Parse.pod
 # http://www.tutorialspoint.com/json/json_perl_example.htm
 # method 1  most readable
 	my $metrics = decode_json($json);
-#print  Dumper($metrics);
+	#print  Dumper($metrics);
 
 	# default of zero
   my $maps_completed = 0;
   my $pending_maps = 0;
 
-#job tracker level metrics -- global
+	#job tracker level metrics -- global
 	my $jobtracker = $metrics -> { 'mapred' } -> { 'jobtracker' }[0][1];
 	print "jobtracker...\n";
   print "*** job tracker level metrics -- global ***\n";

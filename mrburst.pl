@@ -19,14 +19,71 @@ my $class = ();
 my $data_dir = ();
 my $output_dir = ();
 my $output_to_edge = 0;
+my $new_job_name = ();
+my $existing_job_data_size = 0;
 
 if ($numArgs != 5) {
 	print "please, provide <binary_jar>, <class_name>, <data_dir>, <output_dir>, <output to edge 0|1>  as parameters\n";
 	exit(1);
 } else {
   $binary_jar = $ARGV[0]; print "binary_jar: $binary_jar\n";
-  $class = $ARGV[1]; print "class: $class\n";
+  $class = $ARGV[1]; $new_job_name = "([a-zA-Z]+$)";
+
+  if ($class =~ /([a-zA-Z]+)$/) {
+   $new_job_name = $1;
+	}
+
+  print "class: $class, new_job_name: $new_job_name\n";
+
+  my $existing_job_name = (); my $existing_job_id = ();
+  my $cmd = 'mapred job -list | egrep \'^job\' | awk \'{print $1}\' | xargs -n 1 -I {} sh -c "mapred job -status {} | egrep \'^tracking\' | awk \'{print \$3}\'" | xargs -n 1 -I{} sh -c "echo -n {} | sed \'s/.*jobid=//\'; echo -n \' \';curl -s -XGET {} | grep \'Job Name\' | sed \'s/.* //\' | sed \'s/<br>//\'"';
+  my $existing_job_name_str = `$cmd`;
+  if ($existing_job_name_str =~ /([_a-zA-Z0-9]+) ([a-zA-Z]+)$/) {
+    $existing_job_id = $1;
+    $existing_job_name = $2;
+	}
+  print "existing_job_id = $existing_job_id\n";
+	print "existing_job_name = $existing_job_name\n";
+
+  $cmd = "mapred job -status $existing_job_id | grep file";
+  my $output = `$cmd`;
+  my $job_staging_file = ();
+	if ($output =~  /([:_0-9\/\.a-zA-Z]+)$/) {
+    $job_staging_file = $1;
+	}
+  print "job_staging_file:$job_staging_file\n";
+
+  $cmd = "hadoop fs -cat $job_staging_file | grep mapred.input.dir";
+  $output = `$cmd`;
+  my $existing_job_input_folder = ();
+  if ($output =~ /<value>([:_0-9\/\.a-zA-Z]+)<\/value>/) {
+		$existing_job_input_folder = $1;
+	}
+  print "existing_job_input_folder:$existing_job_input_folder\n";
+
+  $cmd = "hadoop fs -du -s $existing_job_input_folder";
+  print "cmd=$cmd\n";
+  $output = `$cmd`;
+  print "output=$output\n";
+
+	if ($output =~ /^([0-9]+)/) {
+  	$existing_job_data_size = $1;
+	}
+
+  $existing_job_data_size  = $existing_job_data_size /(1024 * 1024 * 1024); #in GB
+  print "existing_job_data_size = $existing_job_data_size GB\n";
+
   $data_dir = $ARGV[2]; print "input data dir: $data_dir\n";
+  my $input_data_size = 0;
+  $cmd = "hadoop fs -du -s $data_dir";
+  $output = `$cmd`;
+	if ($output =~ /^([0-9]+)/) {
+  	$input_data_size = $1;
+	}
+  $input_data_size = $input_data_size /(1024 * 1024 * 1024); #in GB
+
+  print "input_data_size = $input_data_size GB\n";
+
   $output_dir = $ARGV[3]; print "output data dir: $output_dir\n";
   $output_to_edge = $ARGV[4]; print "write results on edge?: $output_to_edge\n";
 }
@@ -34,7 +91,7 @@ if ($numArgs != 5) {
 #if (edgeBusy()) {
 if (1) {
 	print "edge busy, burst out to core\n";
-  remoteAccess();
+  #remoteAccess();
 	#distcp();
 } else {
 	print "edge idle, submit in edge\n";

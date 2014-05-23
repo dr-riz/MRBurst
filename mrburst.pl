@@ -14,21 +14,26 @@ my $browser = WWW::Mechanize->new();
 
 my $bw = 245; #285 Mbps
 my %job_profile = ();
-$job_profile{'ii'}{'mc'} =  0.122222222; #inverted index
-$job_profile{'ii'}{'mt'} =  52.13122222;
-$job_profile{'ii'}{'t'} =  7.10880303;
 
-$job_profile{'wc'}{'mc'} =  0.122222222; #word count
-$job_profile{'wc'}{'mt'} =  50.519;
-$job_profile{'wc'}{'t'} =  6.888954545;
+# Mc = data consumed by each map task
+# Mt = average time spent by each map in the occupied slots
+# t = execution time of 1 slot with 1 GB of job data
 
-$job_profile{'grep'}{'mc'} =  0.122222222; #grep
-$job_profile{'grep'}{'mt'} =  8.960333333;
-$job_profile{'grep'}{'t'} =  1.221863636;
+$job_profile{'invertedindex'}{'mc'} =  0.122222222; #inverted index
+$job_profile{'invertedindex'}{'mt'} =  52.13122222;
+$job_profile{'invertedindex'}{'t'} =  7.10880303;
 
-my $mc = 0.122222222;
-my $mt = 52.13122222;
-my $t = 7.10880303;
+$job_profile{'wordcount'}{'mc'} =  0.122222222; #word count
+$job_profile{'wordcount'}{'mt'} =  50.519;
+$job_profile{'wordcount'}{'t'} =  6.888954545;
+
+$job_profile{'grep-search'}{'mc'} =  0.122222222; #grep
+$job_profile{'grep-search'}{'mt'} =  8.960333333;
+$job_profile{'grep-search'}{'t'} =  1.221863636;
+
+$job_profile{'classification'}{'mc'} =  0.125; #classification
+$job_profile{'classification'}{'mt'} =  40.9185;
+$job_profile{'classification'}{'t'} =  5.4558;
 
 # input: <binary.jar>, <class>, <local data dir>, <results data dir>
 my $numArgs = $#ARGV + 1;
@@ -38,6 +43,8 @@ my $data_dir = ();
 my $output_dir = ();
 my $output_to_edge = 0;
 my $new_job_name = ();
+my $input_data_size = 0;
+my $existing_job_name = ();
 my $existing_job = 0; # by default, there is no existing job
 my $existing_job_data_size = 0;
 
@@ -49,13 +56,13 @@ if ($numArgs != 5) {
   $class = $ARGV[1]; $new_job_name = "([a-zA-Z]+$)";
 
   if ($class =~ /([a-zA-Z]+)$/) {
-   $new_job_name = $1;
+   $new_job_name = lc($1);
 	}
 
   print "class: $class, new_job_name: $new_job_name\n";
 
   # extract existing job metrics
-  my $existing_job_name = (); my $existing_job_id = ();
+  my $existing_job_id = ();
   my $cmd = 'mapred job -list | egrep \'^job\' | awk \'{print $1}\' | xargs -n 1 -I {} sh -c "mapred job -status {} | egrep \'^tracking\' | awk \'{print \$3}\'" | xargs -n 1 -I{} sh -c "echo -n {} | sed \'s/.*jobid=//\'; echo -n \' \';curl -s -XGET {} | grep \'Job Name\' | sed \'s/.* //\' | sed \'s/<br>//\'"';
   my $existing_job_name_str = `$cmd`;
   if ($existing_job_name_str =~ /([_a-zA-Z0-9]+) ([a-zA-Z]+)$/) {
@@ -63,6 +70,7 @@ if ($numArgs != 5) {
     $existing_job_name = $2;
     $existing_job = 1;
 
+    print "\n *** a job is already executing in edge ***\n";
     print "existing_job_id = $existing_job_id\n";
 		print "existing_job_name = $existing_job_name\n";
 
@@ -92,11 +100,10 @@ if ($numArgs != 5) {
 		}
 
   	$existing_job_data_size  = $existing_job_data_size /(1024 * 1024 * 1024); #in GB
-	  print "existing_job_data_size = $existing_job_data_size GB\n";
+	  print "existing_job_data_size = $existing_job_data_size GB\n\n";
   }
 
-  $data_dir = $ARGV[2]; print "input data dir: $data_dir\n";
-  my $input_data_size = 0;
+  $data_dir = $ARGV[2]; print "input data dir for new job: $data_dir\n";
   $cmd = "hadoop fs -du -s $data_dir";
   my $output = `$cmd`;
 	if ($output =~ /^([0-9]+)/) {
@@ -112,11 +119,11 @@ if ($numArgs != 5) {
 
 if (edgeBusy()) {
 #if (1) {
-	print "edge busy, burst out to core\n";
+	print "cheaper to execute in core, burst out to core\n";
   #remoteAccess();
 	#distcp();
 } else {
-	print "edge idle, submit in edge\n";
+	print "cheaper to execute in edge, submit in edge\n";
   #my $cmd = "hadoop jar $binary_jar $class $data_dir $output_dir";
 #	print "executing command: $cmd\n";
 #	my $retcode = system($cmd) == 0 or die "system failed with ret code?: $?";
@@ -166,7 +173,7 @@ sub edgeBusy {
 		my $num_of_jobs = 0;
 		if ((@jobs)) {
 			$num_of_jobs = @jobs;
-  		print "number of MR jobs (size of @jobs) = $num_of_jobs\n";
+  		#print "number of MR jobs (size of @jobs) = $num_of_jobs\n";
   		#print Dumper(@jobs);
 		}
 
@@ -183,7 +190,7 @@ sub edgeBusy {
   	  	if ($taskType eq "MAP" ) {
     			print "map task...collect metrics\n";
 	    	} else {
-  	  		print "not a map task but:" . $taskType . "\n";
+          #print "not a map task but:" . $taskType . "\n";
     	  	next;
     		}
 				#print "task = $task\n";
@@ -211,11 +218,9 @@ sub edgeBusy {
 			}
   	}
 
-		my $cmd = "hadoop job -counter " . $current_job{'name'} . " org.apache.hadoop.mapreduce.JobCounter TOTAL_LAUNCHED_MAPS";
-		print "executing command: $cmd\n";
+		my $cmd = "mapred job -counter " . $current_job{'name'} . " org.apache.hadoop.mapreduce.JobCounter TOTAL_LAUNCHED_MAPS";
+		#print "executing command: $cmd\n";
 		my $output = `$cmd`;
-		print "output: $output\n";
-
 		if ($output =~ /([0-9]+)/) {
   		$maps_completed = $1;
 		} else {
@@ -225,23 +230,30 @@ sub edgeBusy {
 		$pending_maps = $current_job{'demand'};
     $maps_completed = $maps_completed - $current_job{'runningTasks'};
 
-		print "maps_completed =" . $maps_completed . "\n";
-		print "i=$i, j=$j, k=$k, l=$l\n";
-		print "map profile for a job...\n";
-		print "[job] name=" . $current_job{'name'} . "\n";
+		#print "i=$i, j=$j, k=$k, l=$l\n";
+		print "map profile for existing job...\n";
+ 		print "maps_completed =" . $maps_completed . "\n";
+		print "[job id] name=" . $current_job{'name'} . "\n";
 		print "runningTasks [maps]=" . $current_job{'runningTasks'} . "\n";
 		print "pending_maps or demand=" . $pending_maps . "\n";
 	}
 
   my $slots = $map_slots;
-  my $data = 50;
 
-  my $cost_e = ($data - ($maps_completed * $job_profile{'ii'}{'mc'}))/$slots * $job_profile{'ii'}{'t'};
-  my $cost_i = ($data * $job_profile{'grep'}{'t'})/$slots;
+  my $cost_e = 0; # by default, assume no job running and cost 0
+  if($map_jobs_running > 0) {
+  	if (defined $job_profile{$existing_job_name}) {
+	  	$cost_e = ($existing_job_data_size - ($maps_completed * $job_profile{$existing_job_name}{'mc'}))/$slots * $job_profile{$existing_job_name}{'t'};
+    } else {
+      print "profiling information for \"$existing_job_name\" not present, so setting very high value\n";
+      $cost_e = 9999999999;
+    }
+  }
+  my $cost_i = ($input_data_size * $job_profile{$new_job_name}{'t'})/$slots;
   my $cost_l = $cost_e + $cost_i;
 
   # We begin by assuming the core is idle.
-  my $cost_ri = ($data * $job_profile{'grep'}{'t'}) / $slots + ($data * 1024) / ($bw * 60/8);
+  my $cost_ri = ($input_data_size * $job_profile{$new_job_name}{'t'}) / $slots + ($input_data_size * 1024) / ($bw * 60/8);
 
   print "execution cost of existing job = $cost_e\n";
   print "execution cost new job = $cost_i\n";

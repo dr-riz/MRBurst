@@ -51,7 +51,7 @@ my $existing_job_name = ();
 my $existing_job = 0; # by default, there is no existing job
 my $existing_job_data_size = 0;
 
-my $numArgs = $#ARGV + 1;
+$numArgs = $#ARGV + 1;
 if ($numArgs != 6) {
 	print "please, provide <binary_jar>, <class_name>, <data_dir>, <output_dir>, <job-input-params>, <output to edge 0|1>  as parameters\n";
 	exit(1);
@@ -69,7 +69,7 @@ if ($numArgs != 6) {
   my $existing_job_id = ();
   my $cmd = 'mapred job -list | egrep \'^job\' | awk \'{print $1}\' | xargs -n 1 -I {} sh -c "mapred job -status {} | egrep \'^tracking\' | awk \'{print \$3}\'" | xargs -n 1 -I{} sh -c "echo -n {} | sed \'s/.*jobid=//\'; echo -n \' \';curl -s -XGET {} | grep \'Job Name\' | sed \'s/.* //\' | sed \'s/<br>//\'"';
   my $existing_job_name_str = `$cmd`;
-  if ($existing_job_name_str =~ /([_a-zA-Z0-9]+) ([a-zA-Z]+)$/) {
+  if ($existing_job_name_str =~ /([_a-zA-Z0-9]+) ([a-zA-Z-]+)$/) {
     $existing_job_id = $1;
     $existing_job_name = $2;
     $existing_job = 1;
@@ -81,7 +81,7 @@ if ($numArgs != 6) {
 	  $cmd = "mapred job -status $existing_job_id | grep file";
   	my $output = `$cmd`;
 	  my $job_staging_file = ();
-		if ($output =~  /([:_0-9\/\.a-zA-Z]+)$/) {
+		if ($output =~  /([:_0-9\-\/\.a-zA-Z]+)$/) {
     	$job_staging_file = $1;
 		}
   	print "job_staging_file:$job_staging_file\n";
@@ -254,7 +254,7 @@ sub edgeBusy {
   my $cost_ri = ($input_data_size * $job_profile{$new_job_name}{'t'}) / $slots + ($input_data_size * 1024) / ($bw * 60/8);
 
   print "execution cost of existing job = $cost_e\n";
-  print "execution cost new job = $cost_i\n";
+  print "execution cost new job in edge = $cost_i\n";
   print "cost of executing new job locally (edge) in presence of old job = $cost_l\n";
   print "cost of executing new job remotely (core) = $cost_ri\n";
 

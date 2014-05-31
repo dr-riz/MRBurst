@@ -5,7 +5,7 @@ use Data::Dumper;
 use WWW::Mechanize;
 
 my $json_url = "http://mianemaster:50030/metrics?format=json";
-my $metrics_file = "C:/Users/mian/Documents/research/academic-profile/academic job/pdf/york/MRBurst/MRBurst/metrics";
+my $metrics_file = "C:/Users/mian/Documents/research/academic-profile/academic job/pdf/york/MRBurst_folder/MRBurst/metrics";
 my $browser = WWW::Mechanize->new();
 
 # References
@@ -16,11 +16,11 @@ my $browser = WWW::Mechanize->new();
 print "Getting Job Tracker metrics json $json_url \n or reading $metrics_file...\n";
 $browser->get( $json_url );
 my $content = $browser->content();
-my $json = $content; # from URL
+#my $json = $content; # from URL
 
 my $metrics_fn = $metrics_file;
-#open(my $fh, "<", $metrics_fn) or die "cannot open < $metrics_fn: $!";
-#my $json = <$fh>; # from file
+open(my $fh, "<", $metrics_fn) or die "cannot open < $metrics_fn: $!";
+my $json = <$fh>; # from file
 
 #print "json object: " . $json . "\n";
 
@@ -53,6 +53,8 @@ if ((@jobs)) {
 }
 
 my %current_job = ();
+my @job_array = ();
+my %job_hash = ();
 
 my $i=0, my $j=0, my $k=0, my $l=0;
 # following loop iterates and extracts from #jobs - array of array of hashes
@@ -78,27 +80,36 @@ foreach my $tasks(@jobs){
 			my $count = keys %$unit;
       if($count == 3) {
 	      $current_job{'name'} = $unit->{'name'};
+        my $jobid =  $unit->{'name'};
+        $job_array[$l] = $jobid;
       }
 
       if($count == 5) {
-      	$l++;
+
+        #$current_job{"$jobid"}{'runningTasks'} = $unit->{'runningTasks'};
+        #$current_job{'name'} = $unit->{'name'};
       	$current_job{'runningTasks'} = $unit->{'runningTasks'};
         $current_job{'demand'} = $unit->{'demand'};
 
+        $job_hash{$job_array[$l]}{'runningTasks'} =  $unit->{'runningTasks'};
+        $job_hash{$job_array[$l]}{'demand'} =  $unit->{'demand'};
+        $job_hash{$job_array[$l]}{'fairShare'} =  $unit->{'fairShare'};
       #print out contents of hash
-  	  #while( my ($k, $v) = each %$unit ) {
-    	#  print "key: $k, value: $v.\n";
-    	#}
+  	  while( my ($k, $v) = each %$unit ) {
+    	  print "key: $k, value: $v.\n";
+    	}
+
+      $l++;
       }
 	  }
 	}
 }
 
-
 #hadoop job -counter job_201405141544_0017 org.apache.hadoop.mapreduce.JobCounter TOTAL_LAUNCHED_MAPS
-my $cmd = "hadoop job -counter " . $current_job{'name'} . " org.apache.hadoop.mapreduce.JobCounter TOTAL_LAUNCHED_MAPS";
-print "executing command: $cmd\n";
-my $output = `$cmd`;
+#my $cmd = "hadoop job -counter " . $current_job{'name'} . " org.apache.hadoop.mapreduce.JobCounter TOTAL_LAUNCHED_MAPS";
+#print "executing command: $cmd\n";
+#my $output = `$cmd`;
+my $output = "140 ";
 print "output: $output\n";
 
 my $maps_completed = 0; # default of zero
@@ -112,3 +123,15 @@ print "map profile for a job...\n";
 print "name=" . $current_job{'name'} . "\n";
 print "runningTasks=" . $current_job{'runningTasks'} . "\n";
 print "demand=" . $current_job{'demand'} . "\n";
+
+print "\n\nprinting out details in #hash\n";
+while (my ($k,$v)=each %current_job){print "key:$k=value:$v\n"}
+
+print "\n\nprinting out details in array\n";
+#dump(@job_array);
+print join(", ", @job_array);
+#print join(@job_array, "\n");
+
+print "\n\nprinting out details in #job_hash\n";
+#while (my ($k,$v)=each %job_hash){print "key:$k=value:$v\n"}
+print Dumper(%job_hash);

@@ -123,7 +123,7 @@ if ($numArgs != 6) {
 if (edgeBusy()) {
 	print "cheaper to execute in core, burst out to core\n";
   remoteAccess();
-	#distcp();
+	distcp();
 } else {
 	print "cheaper to execute in edge, submit in edge\n";
   my $cmd = "hadoop jar $binary_jar $class $data_dir $output_dir";

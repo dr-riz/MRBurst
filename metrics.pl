@@ -65,9 +65,9 @@ foreach my $tasks(@jobs){
     my $taskType = $metrics -> { 'fairscheduler' } -> { 'jobs' }[$j][0]-> {'taskType'}; # hash-level
    	$j++;
     if ($taskType eq "MAP" ) {
-    	print "map task...collect metrics\n";
+    	#print "map task...collect metrics\n";
     } else {
-    	print "not a map task but:" . $taskType . "\n";
+    	#print "not a map task but:" . $taskType . "\n";
       next;
     }
 		#print "task = $task\n";
@@ -76,7 +76,7 @@ foreach my $tasks(@jobs){
     	$k++;
 			#print "unit = $unit\n";
 
-
+      my $job_id=();
 			my $count = keys %$unit;
       if($count == 3) {
 	      $current_job{'name'} = $unit->{'name'};
@@ -85,7 +85,6 @@ foreach my $tasks(@jobs){
       }
 
       if($count == 5) {
-
         #$current_job{"$jobid"}{'runningTasks'} = $unit->{'runningTasks'};
         #$current_job{'name'} = $unit->{'name'};
       	$current_job{'runningTasks'} = $unit->{'runningTasks'};
@@ -94,12 +93,12 @@ foreach my $tasks(@jobs){
         $job_hash{$job_array[$l]}{'runningTasks'} =  $unit->{'runningTasks'};
         $job_hash{$job_array[$l]}{'demand'} =  $unit->{'demand'};
         $job_hash{$job_array[$l]}{'fairShare'} =  $unit->{'fairShare'};
-      #print out contents of hash
-  	  while( my ($k, $v) = each %$unit ) {
-    	  print "key: $k, value: $v.\n";
-    	}
+      	#print out contents of hash
+  	    #while( my ($k, $v) = each %$unit ) {
+    	  	#print "key: $k, value: $v.\n";
+	    	#}
 
-      $l++;
+      	$l++;
       }
 	  }
 	}
@@ -120,12 +119,8 @@ if ($output =~ /([0-9]+)/) {
 print "maps_completed =" . ($maps_completed -  $current_job{'runningTasks'}) . "\n";
 print "i=$i, j=$j, k=$k, l=$l\n";
 print "map profile for a job...\n";
-print "name=" . $current_job{'name'} . "\n";
-print "runningTasks=" . $current_job{'runningTasks'} . "\n";
-print "demand=" . $current_job{'demand'} . "\n";
-
-print "\n\nprinting out details in #hash\n";
-while (my ($k,$v)=each %current_job){print "key:$k=value:$v\n"}
+#print "\n\nprinting out details in #hash\n";
+#while (my ($k,$v)=each %current_job){print "key:$k=value:$v\n"}
 
 print "\n\nprinting out details in array\n";
 #dump(@job_array);

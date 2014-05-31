@@ -47,9 +47,13 @@ my $output_to_edge = 0;
 
 my $new_job_name = ();
 my $input_data_size = 0;
-my $existing_job_name = ();
+
+my %job_hash = ();
+my @job_array = ();
+
 my $existing_job = 0; # by default, there is no existing job
-my $existing_job_data_size = 0;
+# my $existing_job_name = ();
+# my $existing_job_data_size = 0;
 
 $numArgs = $#ARGV + 1;
 if ($numArgs != 6) {
@@ -68,15 +72,22 @@ if ($numArgs != 6) {
   # extract existing job metrics
   my $existing_job_id = ();
   my $cmd = 'mapred job -list | egrep \'^job\' | awk \'{print $1}\' | xargs -n 1 -I {} sh -c "mapred job -status {} | egrep \'^tracking\' | awk \'{print \$3}\'" | xargs -n 1 -I{} sh -c "echo -n {} | sed \'s/.*jobid=//\'; echo -n \' \';curl -s -XGET {} | grep \'Job Name\' | sed \'s/.* //\' | sed \'s/<br>//\'"';
+  my $output = `$cmd`;
   my $existing_job_name_str = `$cmd`;
+  my @existing_job_str = split /\n/, $output;
+  foreach my $existing_job_name_str(@existing_job_str) {
   if ($existing_job_name_str =~ /([_a-zA-Z0-9]+) ([a-zA-Z-]+)$/) {
-    $existing_job_id = $1;
-    $existing_job_name = $2;
-    $existing_job = 1;
-
     print "\n *** a job is already executing in edge ***\n";
+#		print "existing_job_name_str: $existing_job_name_str\n";
+    my $existing_job_id = $1;
+    my $existing_job_name = $2;
+    my $existing_job_data_size = 0;
+
     print "existing_job_id = $existing_job_id\n";
 		print "existing_job_name = $existing_job_name\n";
+
+    $job_array[$existing_job] = $existing_job_id;
+    $job_hash{$existing_job_id}{'name'} =  $existing_job_name;
 
 	  $cmd = "mapred job -status $existing_job_id | grep file";
   	my $output = `$cmd`;
@@ -84,7 +95,7 @@ if ($numArgs != 6) {
 		if ($output =~  /([:_0-9\-\/\.a-zA-Z]+)$/) {
     	$job_staging_file = $1;
 		}
-  	print "job_staging_file:$job_staging_file\n";
+  	#print "job_staging_file:$job_staging_file\n";
 
 	  $cmd = "hadoop fs -cat $job_staging_file | grep mapred.input.dir";
   	$output = `$cmd`;
@@ -93,6 +104,7 @@ if ($numArgs != 6) {
 			$existing_job_input_folder = $1;
 		}
   	print "existing_job_input_folder:$existing_job_input_folder\n";
+    $job_hash{$existing_job_id}{'input_folder'} =  $existing_job_input_folder;
 
 	  $cmd = "hadoop fs -du -s $existing_job_input_folder";
 	  $output = `$cmd`;
@@ -103,11 +115,19 @@ if ($numArgs != 6) {
 
   	$existing_job_data_size  = $existing_job_data_size /(1024 * 1024 * 1024); #in GB
 	  print "existing_job_data_size = $existing_job_data_size GB\n\n";
+    $job_hash{$existing_job_id}{'data'} =  $existing_job_data_size;
+
+    $existing_job++;
   }
+  	print "\n\n";
+  }
+	#print "\n\nprinting out details in #job_hash\n";
+	#while (my ($k,$v)=each %job_hash){print "key:$k=value:$v\n"}
+	#print Dumper(%job_hash);
 
   $data_dir = $ARGV[2]; print "input data dir for new job: $data_dir\n";
   $cmd = "hadoop fs -du -s $data_dir";
-  my $output = `$cmd`;
+  $output = `$cmd`;
 	if ($output =~ /^([0-9]+)/) {
   	$input_data_size = $1;
 	}
@@ -122,20 +142,20 @@ if ($numArgs != 6) {
 
 if (edgeBusy()) {
 	print "cheaper to execute in core, burst out to core\n";
-  remoteAccess();
-	distcp();
+  #remoteAccess();
+	##distcp();
 } else {
 	print "cheaper to execute in edge, submit in edge\n";
-  my $cmd = "hadoop jar $binary_jar $class $data_dir $output_dir";
-	print "executing command: $cmd\n";
-	my $retcode = system($cmd) == 0 or die "system failed with ret code?: $?";
-	print "retcode = $retcode\n";
+  #my $cmd = "hadoop jar $binary_jar $class $data_dir $output_dir";
+	#print "executing command: $cmd\n";
+	#my $retcode = system($cmd) == 0 or die "system failed with ret code?: $?";
+	#print "retcode = $retcode\n";
 }
 
 sub edgeBusy {
 # download the json page:
 # ref: http://beerpla.net/2008/03/27/parsing-json-in-perl-by-example-southparkstudioscom-south-park-episodes/
-	print "Getting Job Tracker $json_url\n";
+	print "Getting Job Tracker metrics json $json_url\n";
 	$browser->get( $json_url );
 	my $content = $browser->content();
 	my $json = $content; # from URL
@@ -146,7 +166,7 @@ sub edgeBusy {
 # http://www.tutorialspoint.com/json/json_perl_example.htm
 # method 1  most readable
 	my $metrics = decode_json($json);
-	#print  Dumper($metrics);
+	print  Dumper($metrics);
 
 	# default of zero
   my $maps_completed = 0;
@@ -175,13 +195,13 @@ sub edgeBusy {
   		#print Dumper(@jobs);
 		}
 
-		my %current_job = ();
+#		my %current_job = ();
 
 		my $i=0, my $j=0, my $k=0, my $l=0;
 		# following loop iterates and extracts from #jobs - array of array of hashes
 		foreach my $tasks(@jobs){
 			$i++;
-			print "tasks = $tasks\n";
+#			print "tasks = $tasks\n";
 			foreach my $task (@{$tasks}) {
     		my $taskType = $metrics -> { 'fairscheduler' } -> { 'jobs' }[$j][0]-> {'taskType'}; # hash-level
 	   		$j++;
@@ -193,58 +213,91 @@ sub edgeBusy {
     		}
 				#print "task = $task\n";
     		my $map_task = 0; # boolean to represent map or reduce task
+        my $job_id=();
 	  		foreach my $unit (@{$task}) {  # unit is the atomic level hash or leaf node
     			$k++;
 					#print "unit = $unit\n";
 
 					my $count = keys %$unit;
   	    	if($count == 3) {
-	  	    	$current_job{'name'} = $unit->{'name'};
+#	  	    	$current_job{'name'} = $unit->{'name'};
+            $job_id = $unit->{'name'}; # this name is really jobid
+            #print "job_id=$job_id\n";
       		}
 
 	      	if($count == 5) {
-  	    		$l++;
-    	  		$current_job{'runningTasks'} = $unit->{'runningTasks'};
-      	  	$current_job{'demand'} = $unit->{'demand'};
+         		#print "job_id=$job_id\n";
+#    	  		$current_job{'runningTasks'} = $unit->{'runningTasks'};
+#      	  	$current_job{'demand'} = $unit->{'demand'};
 
+            $job_hash{$job_id}{'runningTasks'} = $unit->{'runningTasks'};
+            $job_hash{$job_id}{'demand'} = $unit->{'demand'};
 	      	#print out contents of hash
   		  	#while( my ($k, $v) = each %$unit ) {
     			#  print "key: $k, value: $v.\n";
     			#}
-	      	}
+          	$l++;
+
+          # TOTAL_LAUNCHED_MAPS = The number of map tasks that were launched. Includes tasks that were started speculatively.
+          # https://www.inkling.com/read/hadoop-definitive-guide-tom-white-3rd/chapter-8/counters
+          my $cmd = "mapred job -counter " . $job_id . " org.apache.hadoop.mapreduce.JobCounter TOTAL_LAUNCHED_MAPS";
+#					print "executing command: $cmd\n";
+					my $output = `$cmd`;
+#          print "$output";
+					if ($output =~ /([0-9]+)/) {
+  					$maps_completed = $1;
+					} else {
+    				$maps_completed = 0;
+			    }
+
+          #print "job_id=$job_id\n";
+
+          my $running_maps =  $job_hash{$job_id}{'runningTasks'};
+#          print "runningTasks=$running_maps";
+          $job_hash{$job_id}{'maps_completed'} = $maps_completed - $running_maps;
+
+          # total maps = $maps_completed + demand
+          # demand = pending maps + running tasks
+
+#       		$pending_maps = $current_job{'demand'};
+ #			    $maps_completed = $maps_completed - $current_job{'runningTasks'};
+          }
 		  	}
 			}
   	}
 
-		my $cmd = "mapred job -counter " . $current_job{'name'} . " org.apache.hadoop.mapreduce.JobCounter TOTAL_LAUNCHED_MAPS";
-		#print "executing command: $cmd\n";
-		my $output = `$cmd`;
-		if ($output =~ /([0-9]+)/) {
-  		$maps_completed = $1;
-		} else {
-    	$maps_completed = 0;
-    }
-
-		$pending_maps = $current_job{'demand'};
-    $maps_completed = $maps_completed - $current_job{'runningTasks'};
-
 		#print "i=$i, j=$j, k=$k, l=$l\n";
-		print "map profile for existing job...\n";
- 		print "maps_completed =" . $maps_completed . "\n";
-		print "[job id] name=" . $current_job{'name'} . "\n";
-		print "runningTasks [maps]=" . $current_job{'runningTasks'} . "\n";
-		print "pending_maps or demand=" . $pending_maps . "\n";
+#		print "map profile for existing job...\n";
+# 		print "maps_completed =" . $maps_completed . "\n";
+#		print "[job id] name=" . $current_job{'name'} . "\n";
+#		print "runningTasks [maps]=" . $current_job{'runningTasks'} . "\n";
+#		print "pending_maps or demand=" . $pending_maps . "\n";
+
+		print "\n\nprinting out details in #job_hash\n";
+		#while (my ($k,$v)=each %job_hash){print "key:$k=value:$v\n"}
+		print Dumper(%job_hash);
 	}
 
   my $slots = $map_slots;
 
   my $cost_e = 0; # by default, assume no job running and cost 0
   if($map_jobs_running > 0) {
-  	if (defined $job_profile{$existing_job_name}) {
-	  	$cost_e = ($existing_job_data_size - ($maps_completed * $job_profile{$existing_job_name}{'mc'}))/$slots * $job_profile{$existing_job_name}{'t'};
-    } else {
-      print "profiling information for \"$existing_job_name\" not present, so setting very high value\n";
-      $cost_e = 9999999999;
+    foreach my $job_id ( keys %job_hash ) {
+    	print "job_id = $job_id\n";
+    	my $job_name = $job_hash{$job_id}{'name'};
+      print "job name = $job_name\n";
+	  	if (defined $job_profile{$job_name}) {
+        #$cost_e = ($existing_job_data_size - ($maps_completed * $job_profile{$existing_job_name}{'mc'}))/$slots * $job_profile{$existing_job_name}{'t'};
+        my $maps_completed = $job_hash{$job_id}{'maps_completed'};
+        my $job_data_size = $job_hash{$job_id}{'data'};
+        my $cost_this = ($job_data_size - ($maps_completed * $job_profile{$job_name}{'mc'}))/$slots * $job_profile{$job_name}{'t'};
+
+        print "execution cost (m) of existing job \"$job_name\" = $cost_this\n";
+        $cost_e += $cost_this;
+	    } else {
+  	    print "profiling information for \"$job_name\" not present, so setting very high value\n";
+    	  $cost_e = 9999999999;
+    	}
     }
   }
   my $cost_i = ($input_data_size * $job_profile{$new_job_name}{'t'})/$slots;
@@ -253,10 +306,10 @@ sub edgeBusy {
   # We begin by assuming the core is idle.
   my $cost_ri = ($input_data_size * $job_profile{$new_job_name}{'t'}) / $slots + ($input_data_size * 1024) / ($bw * 60/8);
 
-  print "execution cost of existing job = $cost_e\n";
+  print "aggregate execution cost (m) of existing job(s) = $cost_e\n";
   print "execution cost new job in edge = $cost_i\n";
-  print "cost of executing new job locally (edge) in presence of old job = $cost_l\n";
-  print "cost of executing new job remotely (core) = $cost_ri\n";
+  print "cost of executing (m) new job locally (edge) in presence of old job = $cost_l\n";
+  print "cost of executing (m) new job remotely (core) = $cost_ri\n";
 
   return ($cost_l > $cost_ri );
 }
